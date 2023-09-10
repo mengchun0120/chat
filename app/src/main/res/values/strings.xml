@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">chat</string>
+    <string name="your_ip">Your IP</string>
+    <string name="run_as_server">Run as server</string>
+    <string name="connect_to_server">Connect to server</string>
+    <string name="cancel">Cancel</string>
+    <string name="wait_for_client">Waiting for client ...</string>
+    <string name="wait_for_server">Connecting to server ...</string>
+</resources>
