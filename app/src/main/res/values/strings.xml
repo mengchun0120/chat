@@ -3,7 +3,15 @@
     <string name="your_ip">Your IP</string>
     <string name="run_as_server">Run as server</string>
     <string name="connect_to_server">Connect to server</string>
+    <string name="stop_server">Stop server</string>
+    <string name="stop_connect">Stop connect</string>
     <string name="cancel">Cancel</string>
-    <string name="wait_for_client">Waiting for client ...</string>
-    <string name="wait_for_server">Connecting to server ...</string>
+    <string name="wait_for_client">Waiting for client &#8230;</string>
+    <string name="wait_for_server">Connecting to server &#8230;</string>
+    <string name="enter_server_address">Enter server address</string>
+    <string name="server_ip">Server IP</string>
+    <string name="port">Port</string>
+    <string name="ok">OK</string>
+    <string name="invalid_ip">Invalid IP</string>
+    <string name="invalid_port">Invalid port</string>
 </resources>
