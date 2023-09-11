@@ -30,7 +30,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     class ChatAdapter: RecyclerView.Adapter<ChatViewHolder>() {
-        val records = ArrayList<ChatRecord>()
+        val records = arrayListOf(
+            ChatRecord("Michael", "This is me flying to your place", true, Date(System.currentTimeMillis())),
+            ChatRecord("Mira", "Hold it tight, I will be there", false, Date(System.currentTimeMillis())),
+        )
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChatViewHolder {
             val inflater = LayoutInflater.from(parent.context)

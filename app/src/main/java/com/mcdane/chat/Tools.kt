@@ -8,4 +8,4 @@ import java.net.InetAddress
 fun findLocalIPv4(context: Context): InetAddress? =
     context.getSystemService(ConnectivityManager::class.java).run {
         getLinkProperties(activeNetwork)
-    }?.linkAddresses?.find { it.prefixLength == 24 }?.address
+    }?.linkAddresses?.find { it.address.address.size == 4 }?.address
