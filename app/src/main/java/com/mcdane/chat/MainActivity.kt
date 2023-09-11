@@ -1,26 +1,67 @@
 package com.mcdane.chat
 
-import android.net.ConnectivityManager
-import android.net.wifi.WifiManager
-import android.opengl.Visibility
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.io.BufferedReader
-import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.PrintWriter
-import java.io.Reader
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.sql.Date
 
 class MainActivity : AppCompatActivity() {
+    data class ChatRecord(
+        val name: String, val msg: String, val local: Boolean, val time: Date
+    )
+
+    class ChatViewHolder(view: View): RecyclerView.ViewHolder(view) {
+        val nameText: TextView = view.findViewById(R.id.name)
+        val msgText: TextView = view.findViewById(R.id.msg)
+        val timeText: TextView = view.findViewById(R.id.time)
+    }
+
+    class ChatAdapter: RecyclerView.Adapter<ChatViewHolder>() {
+        val records = ArrayList<ChatRecord>()
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChatViewHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            val layout = if (viewType == LOCAL_VIEW) {
+                R.layout.local_chat_record
+            } else {
+                R.layout.remote_chat_record
+            }
+            val view = inflater.inflate(layout, parent, false)
+            return ChatViewHolder(view)
+        }
+
+        override fun getItemCount(): Int = records.size
+
+        override fun onBindViewHolder(holder: ChatViewHolder, position: Int) {
+            with(holder) {
+                nameText.text = records[position].name
+                msgText.text = records[position].msg
+                timeText.text = records[position].time.toString()
+            }
+        }
+
+        override fun getItemViewType(position: Int): Int =
+            if (records[position].local) LOCAL_VIEW else REMOTE_VIEW
+
+        companion object {
+            const val LOCAL_VIEW = 0
+            const val REMOTE_VIEW = 1
+        }
+    }
+
     private lateinit var localIPText: TextView
     private lateinit var statusText: TextView
     private lateinit var runAsServerButton: Button
@@ -35,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private var socket: Socket? = null
     private var writer: PrintWriter? = null
     private var reader: BufferedReader? = null
+    private var adapter = ChatAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +95,8 @@ class MainActivity : AppCompatActivity() {
         setConnectToServerButton(false)
         connectButtons = findViewById(R.id.connect_buttons)
         msgList = findViewById(R.id.msg_list)
+        msgList.adapter = adapter
+        msgList.layoutManager = LinearLayoutManager(this)
         msgEdit = findViewById(R.id.msg_edit)
         sendButton = findViewById(R.id.send_button)
         sendButton.setOnClickListener{ onSendClicked() }
