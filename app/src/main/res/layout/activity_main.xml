@@ -47,14 +47,25 @@
             android:id="@+id/run_as_server_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/run_as_server" />
+            android:text="@string/run_as_server"
+            />
 
         <Button
             android:id="@+id/connect_to_server_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="30dp"
-            android:text="@string/connect_to_server"/>
+            android:layout_marginStart="20dp"
+            android:text="@string/connect_to_server"
+            />
+
+        <Button
+            android:id="@+id/disconnect_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:text="@string/disconnect"
+            android:visibility="gone"
+            />
 
     </LinearLayout>
 

@@ -2,9 +2,13 @@ package com.mcdane.chat
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
+import android.view.View.GONE
+import android.view.View.VISIBLE
 import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
@@ -16,7 +20,9 @@ import java.io.PrintWriter
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.CharBuffer
 import java.sql.Date
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
     data class ChatRecord(
@@ -30,10 +36,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     class ChatAdapter: RecyclerView.Adapter<ChatViewHolder>() {
-        val records = arrayListOf(
-            ChatRecord("Michael", "This is me flying to your place", true, Date(System.currentTimeMillis())),
-            ChatRecord("Mira", "Hold it tight, I will be there", false, Date(System.currentTimeMillis())),
-        )
+        val records = ArrayList<ChatRecord>()
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ChatViewHolder {
             val inflater = LayoutInflater.from(parent.context)
@@ -59,17 +62,20 @@ class MainActivity : AppCompatActivity() {
         override fun getItemViewType(position: Int): Int =
             if (records[position].local) LOCAL_VIEW else REMOTE_VIEW
 
+
         companion object {
             const val LOCAL_VIEW = 0
             const val REMOTE_VIEW = 1
         }
     }
 
+    private val handlerThread = HandlerThread("chat").apply{ start() }
+    private val handler = Handler(handlerThread.looper)
     private lateinit var localIPText: TextView
     private lateinit var statusText: TextView
     private lateinit var runAsServerButton: Button
     private lateinit var connectToServerButton: Button
-    private lateinit var connectButtons: LinearLayout
+    private lateinit var discconectButton: Button
     private lateinit var msgList: RecyclerView
     private lateinit var msgEdit: EditText
     private lateinit var sendButton: Button
@@ -80,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private var writer: PrintWriter? = null
     private var reader: BufferedReader? = null
     private var adapter = ChatAdapter()
+    private val running = AtomicBoolean()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,15 +99,22 @@ class MainActivity : AppCompatActivity() {
     private fun initUI() {
         localIPText = findViewById(R.id.local_ip)
         statusText = findViewById(R.id.status)
+
         runAsServerButton = findViewById(R.id.run_as_server_button)
         setRunAsServerButton(false)
+
         connectToServerButton = findViewById(R.id.connect_to_server_button)
         setConnectToServerButton(false)
-        connectButtons = findViewById(R.id.connect_buttons)
+
+        discconectButton = findViewById(R.id.disconnect_button)
+        discconectButton.setOnClickListener{ disconnect() }
+
         msgList = findViewById(R.id.msg_list)
         msgList.adapter = adapter
         msgList.layoutManager = LinearLayoutManager(this)
+
         msgEdit = findViewById(R.id.msg_edit)
+
         sendButton = findViewById(R.id.send_button)
         sendButton.setOnClickListener{ onSendClicked() }
     }
@@ -137,14 +151,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onSendClicked() {
-        Log.i(TAG, "Send clicked")
+        val msg = msgEdit.text.toString()
+        if (!msg.isEmpty()) {
+            handler.post{ sendMsg(msg) }
+        }
     }
 
     private fun startServer() {
         statusText.setText(R.string.wait_for_client)
         setRunAsServerButton(true)
         connectToServerButton.setEnabled(false)
-        Thread{ runServer() }.start()
+        handler.post{ runServer() }
     }
 
     private fun runServer() {
@@ -153,7 +170,7 @@ class MainActivity : AppCompatActivity() {
             socket = serverSocket?.accept()
             remoteIP = socket?.inetAddress
             writer = PrintWriter(socket?.getOutputStream()!!)
-            reader = BufferedReader(InputStreamReader(socket?.getInputStream()!!))
+            startReaderThread()
             onConnectionSuccess()
         } catch (e: java.lang.Exception) {
             Log.e(TAG, "Exception happened: ${e.localizedMessage}")
@@ -165,6 +182,8 @@ class MainActivity : AppCompatActivity() {
         serverSocket?.let{
             if (!it.isClosed) it.close()
         }
+        setRunAsServerButton(false)
+        connectToServerButton.setEnabled(true)
     }
 
     private fun promptServer() {
@@ -172,20 +191,20 @@ class MainActivity : AppCompatActivity() {
             AlertDialog.Builder(this).apply {
                 setTitle(R.string.enter_server_address)
 
-                val view = layoutInflater.inflate(R.layout.get_server_ip_port, null)
+                val view = layoutInflater.inflate(R.layout.get_server_ip, null)
                 setView(view)
 
                 val ipText = view.findViewById<EditText>(R.id.server_ip)
-                val portText = view.findViewById<EditText>(R.id.server_port)
 
                 setPositiveButton(R.string.ok) { dialog, _ ->
-                    val ipStr = ipText.text.toString()
-                    val portStr = portText.text.toString()
-                    if (validateIP(ipStr) && validatePort(portStr)) {
-                        startClient(ipStr, portStr.toInt())
-                        dialog.dismiss()
+                    ipText.text.toString().apply {
+                        if (validateIP(this)) {
+                            startClient(this)
+                            dialog.dismiss()
+                        }
                     }
                 }
+
                 setNegativeButton(R.string.cancel) { dialog, _ ->
                     Log.i(TAG, "Cancel clicked")
                     dialog.dismiss()
@@ -194,20 +213,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startClient(serverIP: String, port: Int) {
-        Log.i(TAG, "startClient $serverIP $port")
+    private fun startClient(serverIP: String) {
         statusText.setText(R.string.wait_for_server)
         setConnectToServerButton(true)
         runAsServerButton.setEnabled(false)
-        Thread{ runClient(serverIP, port) }.start()
+        handler.post{ runClient(serverIP) }
     }
 
-    private fun runClient(serverIP: String, port: Int) {
+    private fun runClient(serverIP: String) {
         try {
-            socket = Socket(serverIP, port)
+            socket = Socket(serverIP, PORT)
             remoteIP = socket?.inetAddress
             writer = PrintWriter(socket?.getOutputStream()!!)
-            reader = BufferedReader(InputStreamReader(socket?.getInputStream()!!))
+            startReaderThread()
             onConnectionSuccess()
         } catch(e: Exception) {
             Log.e(TAG, "Exception happened: ${e.localizedMessage}")
@@ -219,20 +237,76 @@ class MainActivity : AppCompatActivity() {
         socket?.let {
             if (!it.isClosed) it.close()
         }
+        setConnectToServerButton(false)
+        runAsServerButton.setEnabled(true)
+    }
+
+    private fun startReaderThread() {
+        Thread {
+            Log.i(TAG, "readerThread started")
+            val buffer = CharBuffer.allocate(MAX_MSG_LEN)
+            try {
+                running.set(true)
+                reader = BufferedReader(InputStreamReader(socket!!.getInputStream()!!))
+                while (running.get()) {
+                    reader?.apply {
+                        Log.i(TAG, "trying read")
+                        read(buffer)
+                        Log.i(TAG, "read msg ${buffer.toString()}")
+                        addMsg(buffer.toString(), false)
+                    }
+                }
+            } catch(e: Exception) {
+                Log.e(TAG, "Exception happened: ${e.localizedMessage}")
+                onConnectionFail(e.localizedMessage ?: "Unknown exception")
+            }
+        }.start()
+    }
+
+    private fun addMsg(msg: String, local: Boolean) {
+        runOnUiThread {
+            adapter.records.add(
+                ChatRecord(name(local), msg, local, Date(System.currentTimeMillis()))
+            )
+            adapter.notifyItemInserted(adapter.records.size - 1)
+        }
+    }
+
+    private fun sendMsg(msg: String) {
+        try {
+            Log.i(TAG, "sendMsg: $msg")
+            writer!!.println(msg)
+            addMsg(msg, true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception happened: ${e.localizedMessage}")
+            onConnectionFail(e.localizedMessage ?: "Unknown exception")
+        }
+    }
+
+    private fun name(local: Boolean) =
+        (if (local) localIP else remoteIP) ?.hostAddress ?: ""
+
+    private fun disconnect() {
+
     }
 
     private fun onConnectionSuccess() {
         runOnUiThread {
             statusText.text = "Connected to ${remoteIP?.hostAddress}"
-            connectButtons.visibility = View.GONE
             msgEdit.setEnabled(true)
             sendButton.setEnabled(true)
+            runAsServerButton.visibility = GONE
+            connectToServerButton.visibility = GONE
+            discconectButton.visibility = VISIBLE
         }
     }
 
     private fun onConnectionFail(msg: String) {
         runOnUiThread {
             statusText.text = msg
+            runAsServerButton.visibility = VISIBLE
+            connectToServerButton.visibility = VISIBLE
+            discconectButton.visibility = GONE
         }
     }
 
@@ -259,20 +333,9 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
-    private fun validatePort(portStr: String): Boolean =
-        try {
-            if (portStr.toInt() <= 0) {
-                throw RuntimeException("Invalid port")
-            }
-            true
-        } catch (e: Exception) {
-            Log.i(TAG, "Invalid port")
-            Toast.makeText(this, R.string.invalid_port, Toast.LENGTH_SHORT).show()
-            false
-        }
-
     companion object {
         const val TAG = "MainActivity"
         const val PORT = 8999
+        const val MAX_MSG_LEN=200
     }
 }
