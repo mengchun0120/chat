@@ -49,19 +49,22 @@ class MainActivity : AppCompatActivity() {
             return ChatViewHolder(view)
         }
 
-        override fun getItemCount(): Int = records.size
+        override fun getItemCount(): Int {
+            Log.i(TAG, "getItemCount ${records.size}")
+            return records.size
+        }
 
         override fun onBindViewHolder(holder: ChatViewHolder, position: Int) {
             with(holder) {
                 nameText.text = records[position].name
                 msgText.text = records[position].msg
                 timeText.text = records[position].time.toString()
+                Log.i(TAG, "onBind $position")
             }
         }
 
         override fun getItemViewType(position: Int): Int =
             if (records[position].local) LOCAL_VIEW else REMOTE_VIEW
-
 
         companion object {
             const val LOCAL_VIEW = 0
@@ -197,7 +200,7 @@ class MainActivity : AppCompatActivity() {
                 val ipText = view.findViewById<EditText>(R.id.server_ip)
 
                 setPositiveButton(R.string.ok) { dialog, _ ->
-                    ipText.text.toString().apply {
+                    ipText.text.toString().trim().apply {
                         if (validateIP(this)) {
                             startClient(this)
                             dialog.dismiss()
@@ -206,7 +209,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 setNegativeButton(R.string.cancel) { dialog, _ ->
-                    Log.i(TAG, "Cancel clicked")
                     dialog.dismiss()
                 }
             }.show()
@@ -244,16 +246,14 @@ class MainActivity : AppCompatActivity() {
     private fun startReaderThread() {
         Thread {
             Log.i(TAG, "readerThread started")
-            val buffer = CharBuffer.allocate(MAX_MSG_LEN)
             try {
                 running.set(true)
                 reader = BufferedReader(InputStreamReader(socket!!.getInputStream()!!))
                 while (running.get()) {
                     reader?.apply {
-                        Log.i(TAG, "trying read")
-                        read(buffer)
-                        Log.i(TAG, "read msg ${buffer.toString()}")
-                        addMsg(buffer.toString(), false)
+                        val msg = readLine()
+                        Log.i(TAG, "Received $msg")
+                        addMsg(msg, false)
                     }
                 }
             } catch(e: Exception) {
@@ -268,14 +268,18 @@ class MainActivity : AppCompatActivity() {
             adapter.records.add(
                 ChatRecord(name(local), msg, local, Date(System.currentTimeMillis()))
             )
-            adapter.notifyItemInserted(adapter.records.size - 1)
+            Log.i(TAG, "records: ${adapter.records.size}")
+            adapter.notifyItemInserted(adapter.records.size)
         }
     }
 
     private fun sendMsg(msg: String) {
         try {
-            Log.i(TAG, "sendMsg: $msg")
-            writer!!.println(msg)
+            writer?.apply {
+                Log.i(TAG, "Sending $msg")
+                println(msg)
+                flush()
+            }
             addMsg(msg, true)
         } catch (e: Exception) {
             Log.e(TAG, "Exception happened: ${e.localizedMessage}")
@@ -312,18 +316,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun validateIP(ipStr: String): Boolean =
         try {
-            Log.i(TAG, "'$ipStr'")
             var partCount = 0
             for (part in ipStr.splitToSequence(".")) {
-                Log.i(TAG, "$partCount:$part")
                 if (part.toInt() !in 0..255) {
-                    Log.i(TAG, "part INVALID")
                     throw RuntimeException("Invalid IP")
                 }
                 ++partCount
             }
             if (partCount != 4) {
-                Log.i(TAG, "partCount=${partCount}")
                 throw RuntimeException("Invalid IP")
             }
             true
